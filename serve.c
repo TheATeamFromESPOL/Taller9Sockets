@@ -91,48 +91,39 @@ void serve(int sockfd) {
 //Main
 
 int main( int argc, char *argv[]) { 
-	int sockfd, n;
-	if(argc == 1){
-		printf("Uso: ./servidor <ip> <numero de puerto>\n");
-		exit(-1);
-	}
-
-	if(argc != 3){
-		printf( "por favor especificar un numero de puerto\n");
-	}
-	char *ip=argv[1];
+	int sockfd;
+	char *ip = argv[1];
 	int puerto = atoi(argv[2]);
 
-	if (( n = sysconf(_SC_HOST_NAME_MAX)) < 0) 		
-		n = HOST_NAME_MAX; /* best guess */ 
-	if ((host = malloc(n)) == NULL) 
-		printf(" malloc error"); 
-	if (gethostname( host, n) < 0) 		//Obtenemos nombre del host
-		printf(" gethostname error"); 
-	
-	printf("Nombre del host: %s\n", host);	//Mostramos nuestro nombre
-
-	
-
-	//Direccion del servidor
 	struct sockaddr_in direccion_servidor;
 
-	memset(&direccion_servidor, 0, sizeof(direccion_servidor));	//ponemos en 0 la estructura direccion_servidor
-
-	//llenamos los campos
-	direccion_servidor.sin_family = AF_INET;		//IPv4
-	direccion_servidor.sin_port = htons(puerto);		//Convertimos el numero de puerto al endianness de la red
-	direccion_servidor.sin_addr.s_addr = inet_addr("127.0.0.1") ;	//Nos vinculamos a la interface localhost o podemos usar INADDR_ANY para ligarnos A TODAS las interfaces
-
-	
-
-	//inicalizamos servidor (AF_INET + SOCK_STREAM = TCP)
-	if( (sockfd = initserver(SOCK_STREAM, (struct sockaddr *)&direccion_servidor, sizeof(direccion_servidor), 1000)) < 0){	//Hasta 1000 solicitudes en cola 
-		printf("Error al inicializar el servidor\n");	
-	}		
-
+	memset(&direccion_servidor, 0, sizeof(direccion_servidor));
+	direccion_servidor.sin_family = AF_INET;
+	direccion_servidor.sin_port = htons(puerto);
+	direccion_servidor.sin_addr.s_addr = inet_addr(ip) ;
+	sockfd = socket(((struct sockaddr *)&direccion_servidor)->sa_family,SOCK_STREAM,0);
+	bind(sockfd,(struct sockaddr *)&direccion_servidor, sizeof(direccion_servidor));
+	listen(sockfd,100);
+	int clfd;FILE *fp;
+	char buf[BUFLEN];
 	while(1){
-		serve(sockfd);
+		if (( clfd = accept( sockfd, NULL, NULL)) < 0) { 
+			syslog( LOG_ERR, "ruptimed: accept error: %s", strerror( errno));
+			exit( 1); 
+		} 
+
+		set_cloexec(clfd); 
+
+		if (( fp = popen("/usr/bin/uptime", "r")) == NULL) { 	
+			sprintf( buf, "error: %s\n", strerror( errno)); 
+			send( clfd, buf, strlen( buf), 0); 
+		} 
+		else { 
+			while (fgets( buf, BUFLEN, fp) != NULL) 
+				send( clfd, buf, strlen(buf), 0); 
+			pclose( fp);
+		}
+		close(clfd); 
 		
 	}
 	
@@ -140,5 +131,4 @@ int main( int argc, char *argv[]) {
 	
 	exit( 1); 
 }
-
 

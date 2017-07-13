@@ -1,6 +1,6 @@
 all: servidor cliente
 
-servidor: servidor.c 
+servidor: serve.c 
 	gcc -Wall -g $^ -o $@
 
 cliente: cliente.c 
