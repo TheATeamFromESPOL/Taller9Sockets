@@ -18,80 +18,50 @@
 
 
 #define BUFLEN 128 
-#define MAXSLEEP 64
 
-int connect_retry( int domain, int type, int protocol, 	const struct sockaddr *addr, socklen_t alen){
+int main(int argc, char *args[]){	
+	if(argc !=5)
+		return(-1);
+
+	int client;
+	int sizeCliente;
+	int puerto;
+	int hue;
+	char msg[15];
+	char buf[BUFLEN];
+	FILE *archivo;
+	struct sockaddr_in direccionServer;
 	
-	int numsec, fd; /* * Try to connect with exponential backoff. */ 
+	puerto = atoi(args[2]);
+	archivo = fopen(args[3],"rb");
+	if(!archivo) return (-1);
 
-	for (numsec = 1; numsec <= MAXSLEEP; numsec <<= 1) { 
+	client = socket(PF_INET, SOCK_STREAM,0);
+	memset(&direccionServer,0,sizeof(direccionServer));
 
-		if (( fd = socket( domain, type, protocol)) < 0) 
-			return(-1); 
+	direccionServer.sin_family = AF_INET;
+	direccionServer.sin_port = htons(puerto);
+	hue = inet_pton(AF_INET,args[1],&direccionServer.sin_addr);
+	sizeCliente = sizeof(direccionServer);
 
-		if (connect( fd, addr, alen) == 0) { /* * Conexión aceptada. */ 
-			return(fd); 
-		} 
-		close(fd); 				//Si falla conexion cerramos y creamos nuevo socket
-
-		/* * Delay before trying again. */
-		if (numsec <= MAXSLEEP/2)
-
-			sleep( numsec); 
-	} 
-	return(-1); 
-}
-
-
-void print_uptime( int sockfd) { 
-	int n; 
-	char buf[ BUFLEN]; 
-
-	while (( n = recv( sockfd, buf, BUFLEN, 0)) > 0) 				
-		write( STDOUT_FILENO, buf, n); 			//Imprimimos lo que recibimos
-	if (n < 0) 	
-		printf(" recv error"); 
-}
-
-
-
-int main( int argc, char *argv[]) { 
-
-	int sockfd;
-
-	if(argc == 1){
-		printf("Uso: ./cliente <ip> <puerto>\n");
-		exit(-1);
+	if(hue==0){
+		close(client);
+		return(-1);
 	}
 
-	if(argc != 3){
-		printf( "por favor especificar un numero de puerto\n");
+	if (connect(client, (struct sockaddr *)&direccionServer, sizeof(direccionServer)) == -1) {
+		close(client);
+		return(-1);
 	}
 
-	int puerto = atoi(argv[2]);
+	while(!feof(archivo)){
+		fread(buf,sizeof(char),BUFLEN,archivo);
+		if(send(client,buf,BUFLEN,0)==-1)
+			return(-1);
+	}
 
-
-	//Direccion del servidor
-	struct sockaddr_in direccion_cliente;
-
-	memset(&direccion_cliente, 0, sizeof(direccion_cliente));	//ponemos en 0 la estructura direccion_servidor
-
-	//llenamos los campos
-	direccion_cliente.sin_family = AF_INET;		//IPv4
-	direccion_cliente.sin_port = htons(puerto);		//Convertimos el numero de puerto al endianness de la red
-	direccion_cliente.sin_addr.s_addr = inet_addr(argv[1]) ;	//Nos tratamos de conectar a esta direccion
-
-	//AF_INET + SOCK_STREAM = TCP
-
-	if (( sockfd = connect_retry( direccion_cliente.sin_family, SOCK_STREAM, 0, (struct sockaddr *)&direccion_cliente, sizeof(direccion_cliente))) < 0) { 
-		printf("falló conexión\n"); 
-		exit(-1);
-	} 
-
-	//En este punto ya tenemos una conexión válida
-	print_uptime(sockfd);
-
-	return 0; 
+	read(client,msg,sizeof(msg));
+	printf("%s\n",msg);
+	
+	return 0;
 }
-
-
